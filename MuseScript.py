@@ -1,16 +1,26 @@
+from lxml import etree
 from pywinauto import Application
 from pywinauto import timings
 import pyautogui
 import os
+import sys
 import time
 
 # Faster pywinauto GUI interaction time
 timings.Timings.fast()
 
-# Various pathway variables
+# Various important constant variables
 START_DIR = os.getcwd()
 PCK_PATH = os.path.join(START_DIR, "base", "sound", "soundbanks", "pc", "mus.pck")
 XML_PATH = os.path.join(START_DIR, "base", "sound", "soundbanks", "pc", "muse_injector_working_xml.xml")
+MODS_PATH = "xmls"
+MODFILES = os.listdir(MODS_PATH)
+
+# Early-exit if mod folder is empty
+print("Found " + str(len(MODFILES)) + " potential mus.pck mod files")
+#if len(MODFILES) == 0:
+#    print("Terminating without injecting mods.")
+#    sys.exit(0)
 
 # Launch FusionTools and use first window
 app = Application(backend="uia").start('FusionTools.exe') 
@@ -36,9 +46,38 @@ pyautogui.write(XML_PATH)
 pyautogui.press("enter")
 
 time.sleep(1)
-os.remove(PCK_PATH)
 
-# XML WRITING SHIT GOES HERE
+# Parse all XML files
+xmlPack = etree.parse(XML_PATH)
+for modfileName in MODFILES:
+    print("Parsing mod file '" + modfileName + "'")
+    idDict = {}
+    xmlMod = etree.parse(os.path.join(MODS_PATH, modfileName))
+    xmlObjects = xmlMod.xpath("/PCKMod/object")
+    for obj in xmlObjects:
+        for prop in obj:
+            if prop.get("name") == "ID":
+                id = prop.get("value")
+                if id in idDict:
+                    print("     WARNING - Duplicate HIRC object ID " + id + " - Ignoring duplicate entry")
+                else:
+                    idDict.update({id : obj})
+    xmlPackObjects = xmlPack.xpath("/Data/HIRC/object")
+    for packObj in xmlPackObjects:
+        for packProp in packObj:
+            if packProp.get("name") == "ID":
+                id = packProp.get("value")
+                if id in idDict:
+                    packObj.getparent().replace(packObj, idDict[id])
+
+# lxml auto-collapses empty tags (i.e. <derp></derp> --> <derp/>)
+# In a vanilla mus.pck xml, there are no empty, uncollapsed tags except for the <BNKName> in <Metadata>
+# If this tag is collapsed, FusionTools throws an error when importing
+# This line prevent this auto-collapse
+xmlPack.xpath("/Data/MetaData/BNKName")[0].text = ''
+
+# Write the modded XML file
+xmlPack.write(XML_PATH, pretty_print=True, xml_declaration=True, encoding="UTF-8")
 
 # Fourth Window - Import modded XML
 fourth["Button7"].click()
@@ -58,3 +97,5 @@ pyautogui.press("enter")
 time.sleep(1)
 app["Wwise Editor - Ready"]["CloseButton"].click()
 app["Basic Selector"]["CloseButton"].click()
+
+sys.exit(0)

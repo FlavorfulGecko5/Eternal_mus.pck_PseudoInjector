@@ -5,6 +5,10 @@ set temp_text_file=~Muse_Injector_Temp_Output.txt
 set temp_exported_xml=base\sound\soundbanks\pc\muse_injector_working_xml.xml
 set path_pck=base\sound\soundbanks\pc\mus.pck
 set path_pck_backup=base\sound\soundbanks\pc\mus.pck.backup
+set path_mods=xmls\
+
+:: DELETE THIS LINE LATER
+if exist %temp_exported_xml% (del %temp_exported_xml%) 
 
 TITLE mus.pck Pseudo-Injector
 ECHO/
@@ -19,6 +23,11 @@ ECHO/
 if exist FusionTools.exe ( 
     call :CompareHash FusionTools.exe 8f31f9b30ec39e1cc2c0d6d35d9b3794 0 "You must use FusionTools version [101;93m2.4.2[0m"
 ) else ( call :Err "Cannot find FusionTools.exe")
+
+:: Verify existence of xmls folder
+if not exist %path_mods% (call :Err "Cannot locate .pck mods folder '%path_mods%'")
+
+:: TODO - Add existence/hash check for finished build executable
 
 :: Perform initial .pck validation/restoration/backup
 if not exist %path_pck% (call :Err "Cannot find mus.pck")
@@ -35,18 +44,22 @@ if exist %path_pck_backup% (
     echo      Backup created successfully
 )
 
-
-:: Execute Injection script
+:: Execute Injection script if .pck mods folder is not empty
 echo/
 ECHO Injection will begin in 5 seconds.
 ECHO [1;31mDO NOT TOUCH YOUR MOUSE AND KEYBOARD UNTIL THIS FINISHES [0m
 echo/
 timeout /t 5 /nobreak > NUL
-python test.py
+python MuseScript.py
 
-
-:: Report success and terminate
-echo Injection Successful - You may touch your keyboard and mouse again. 
+:: Report success/failure and terminate
+echo/
+if %ERRORLEVEL% EQU 0 (echo Injection Successful) else (
+    echo Injection Failed - your mus.pck was left unmodified.
+    if exist %path_pck% ( del %path_pck%)
+    copy %path_pck_backup% %path_pck% > NUL
+)
+echo You may touch your keyboard and mouse again.
 goto Exit
 
 
@@ -56,7 +69,7 @@ echo Injection cancelled due to the above error.
 echo/
 :Exit
 if exist %temp_text_file% (del %temp_text_file%)
-if exist %temp_exported_xml% (del %temp_exported_xml%)
+::if exist %temp_exported_xml% (del %temp_exported_xml%)
 pause
 exit
 
